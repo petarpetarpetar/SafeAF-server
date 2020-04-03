@@ -1,0 +1,11 @@
+C:\Users\Petar Markovic\source\repos\serverSAF\serverSAF\bin\Debug\netcoreapp3.1\serverSAF.exe
+C:\Users\Petar Markovic\source\repos\serverSAF\serverSAF\bin\Debug\netcoreapp3.1\serverSAF.deps.json
+C:\Users\Petar Markovic\source\repos\serverSAF\serverSAF\bin\Debug\netcoreapp3.1\serverSAF.runtimeconfig.json
+C:\Users\Petar Markovic\source\repos\serverSAF\serverSAF\bin\Debug\netcoreapp3.1\serverSAF.runtimeconfig.dev.json
+C:\Users\Petar Markovic\source\repos\serverSAF\serverSAF\bin\Debug\netcoreapp3.1\serverSAF.dll
+C:\Users\Petar Markovic\source\repos\serverSAF\serverSAF\bin\Debug\netcoreapp3.1\serverSAF.pdb
+C:\Users\Petar Markovic\source\repos\serverSAF\serverSAF\obj\Debug\netcoreapp3.1\serverSAF.csprojAssemblyReference.cache
+C:\Users\Petar Markovic\source\repos\serverSAF\serverSAF\obj\Debug\netcoreapp3.1\serverSAF.AssemblyInfoInputs.cache
+C:\Users\Petar Markovic\source\repos\serverSAF\serverSAF\obj\Debug\netcoreapp3.1\serverSAF.AssemblyInfo.cs
+C:\Users\Petar Markovic\source\repos\serverSAF\serverSAF\obj\Debug\netcoreapp3.1\serverSAF.dll
+C:\Users\Petar Markovic\source\repos\serverSAF\serverSAF\obj\Debug\netcoreapp3.1\serverSAF.pdb
