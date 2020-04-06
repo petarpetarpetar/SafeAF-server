@@ -145,7 +145,7 @@ namespace serverSAF
         #endregion
 
         #region registerHandler
-        static void sendMail()
+        static void sendMail(string address)
         {
             try
             {
@@ -153,7 +153,7 @@ namespace serverSAF
                 SmtpClient SmtpServer = new SmtpClient("smtp.gmail.com");
 
                 mail.From = new MailAddress("safeaf.noreply@gmail.com");
-                mail.To.Add("gospodinpetar2002@gmail.com");
+                mail.To.Add(address);
                 mail.Subject = "Test Mail";
                 mail.Body = "This is for testing SMTP mail from GMAIL";
 
@@ -182,8 +182,8 @@ namespace serverSAF
             var bytesPlainTextData = csp.Decrypt(bytesCypherText, false);
             var plainTextData = System.Text.Encoding.Unicode.GetString(bytesPlainTextData);
 
-            Console.WriteLine("REC: " + plainTextData);
-            sendMail();
+            Console.WriteLine("Rec mail:" + plainTextData);
+            sendMail(plainTextData.Replace('$',' '));
             return false;
         }
         #endregion
