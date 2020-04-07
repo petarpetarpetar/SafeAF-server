@@ -4,7 +4,7 @@ using System.Net;
 using System.Text;
 using System.Security.Cryptography;
 using System.Net.Mail;
-
+using System.IO;
 
 namespace serverSAF
 {
@@ -26,7 +26,9 @@ namespace serverSAF
 
         static NetworkStream stm;
 
-        string mailCode;
+        static string mailCode;
+
+        static string mailPassword;
 
         static byte[] b;
 
@@ -154,15 +156,15 @@ namespace serverSAF
 
                 mail.From = new MailAddress("safeaf.noreply@gmail.com");
                 mail.To.Add(address);
-                mail.Subject = "Test Mail";
-                mail.Body = "This is for testing SMTP mail from GMAIL";
-
+                mail.Subject = "Registration code";
+                mail.Body = File.ReadAllText("../../../Resources/niceMail.html").Replace("[CODEPLACEHOLDER]", mailCode);
+                mail.IsBodyHtml = true;
                 SmtpServer.Port = 587;
-                SmtpServer.Credentials = new System.Net.NetworkCredential("safeaf.noreply@gmail.com", "safeafpassword1");
+                SmtpServer.Credentials = new System.Net.NetworkCredential("safeaf.noreply@gmail.com", mailPassword);
                 SmtpServer.EnableSsl = true;
 
                 SmtpServer.Send(mail);
-                Console.WriteLine("mail Send");
+                Console.WriteLine("mail Sent");
             }
             catch (Exception ex)
             {
@@ -175,7 +177,9 @@ namespace serverSAF
             
             sendResponse(pubKeyStr);  //maybe put it in while(client.Available == 0){} here
             string mailCypher = readFromClient();
-
+            Random random = new Random();
+            int randomCode = random.Next(0, 9999);
+            mailCode = randomCode.ToString();
             var bytesCypherText = Convert.FromBase64String(mailCypher);
             csp.ImportParameters(privKey);
             
@@ -212,6 +216,8 @@ namespace serverSAF
             RSASETUP();
             listen = new TcpListener(IPAddress.Any, 1234);
             listen.Start();
+            Console.WriteLine("please input server's mail password");
+            mailPassword = Console.ReadLine();
             Console.WriteLine("Started the server at the port 1234. Current time: " + DateTime.Now);
 
             while (true) {
