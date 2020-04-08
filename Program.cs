@@ -178,7 +178,7 @@ namespace serverSAF
             sendResponse(pubKeyStr);  //maybe put it in while(client.Available == 0){} here
             string mailCypher = readFromClient();
             Random random = new Random();
-            int randomCode = random.Next(0, 9999);
+            int randomCode = random.Next(1000, 9999);
             mailCode = randomCode.ToString();
             var bytesCypherText = Convert.FromBase64String(mailCypher);
             csp.ImportParameters(privKey);
