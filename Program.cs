@@ -15,6 +15,8 @@ namespace serverSAF
         static RSAParameters privKey;
 
         static RSAParameters pubKey;
+        
+        static char[] ceasarRing;
 
         static string pubKeyStr;
 
@@ -72,7 +74,7 @@ namespace serverSAF
         static bool loginReq()
         {
 
-            sendResponse(pubKeyStr);
+            sendResponse(pubKeyStr,stopCW:true);
 
             Console.WriteLine("server->client: <sent server's public RSA key[c101]>; now expecting client to execute c102");
 
@@ -94,41 +96,46 @@ namespace serverSAF
                 string mail, pw;
                 Console.WriteLine("server: extracting password and mail from " + plainTextData);
                 ExtractPWandMAIL(plainTextData,out mail, out pw);
-                if (!checkIFUserExists(mail + pw))
+                if (!checkIFUserExists(mail + "$" + pw))
                     return false;
+                else
+                    return true;
             }
 
 
             return false;
         }
-        static bool checkIFUserExists(string entry)
-        {
-            char[] ceasarRing = new char[222];
 
+        static void createCeasar()
+        {
+            ceasarRing = new char[222];
             //creating ceasarRing:
             int num = 0;
-            for(int i = 33; i <= 254; i++)
+            for (int i = 33; i <= 254; i++)
             {
-                ceasarRing[num++] = (char) i;
+                ceasarRing[num++] = (char)i;
             }
+        }
+        static bool checkIFUserExists(string entry)
+        {
+            if (ceasarRing == null)
+                createCeasar();
 
             //encoding the given string into ceasarText:
             int SHIFT = 70;
-            string encodedEntry = "";
-
-            foreach(char c in entry)
-            {
-                encodedEntry += (char)((((int)c) + SHIFT)%222);
-            }
-
-            Console.WriteLine("encEntry: " + encodedEntry);
 
             string[] lines = System.IO.File.ReadAllLines("../../../loginBase.data");
-
+            Console.WriteLine("WHOLE DATABASE:");
             foreach(string s in lines)
             {
-                if (string.Equals(encodedEntry, s))
+                string decoded = "";
+                foreach(char c in s)
+                    decoded += (char)((((int)c) - SHIFT) % 222);
+                if (string.Equals(entry, decoded))
+                {
+                    Console.WriteLine("OKAY");
                     return true;
+                }
             }
             return false;
         }
@@ -147,6 +154,70 @@ namespace serverSAF
         #endregion
 
         #region registerHandler
+
+        static bool HandleRegisterRequest()
+        {
+            //
+            var bytesCypherText = Convert.FromBase64String(readFromClient(size: 1024));
+            Console.WriteLine("rec1");
+            csp.ImportParameters(privKey);
+            var bytesPlainTextData = csp.Decrypt(bytesCypherText, false);
+            string newData = System.Text.Encoding.Unicode.GetString(bytesPlainTextData);
+
+            Console.WriteLine(newData);
+
+            String newMail = "";
+            String newCode = "";
+            String newPw = "";
+            int i = 0;
+            for (; i<newData.Length;i++)
+            {
+                if (newData[i] == '$')
+                    break;
+                newMail += newData[i];
+            }
+            for (i++; i < newData.Length; i++)
+            {
+                if (newData[i] == '$')
+                    break;
+                newCode += newData[i];
+            }
+            for (i++; i < newData.Length; i++)
+            {
+                newPw += newData[i];
+            }
+
+            Console.WriteLine("newMail: "+newMail);
+            Console.WriteLine("newCode: " + newCode);
+            Console.WriteLine("newPw: "+ newPw);
+
+            if (ceasarRing == null)
+                createCeasar();
+
+
+            if(newCode == mailCode)
+            {
+                string newUser = "";
+                int SHIFT = 70;
+
+                foreach (char c in newMail+"$"+newPw)
+                {
+                    newUser += (char)((((int)c) + SHIFT) % 222);
+                }
+
+                using (StreamWriter sw = File.AppendText("../../../loginBase.data"))
+                { 
+                    sw.WriteLine(newUser);
+                }
+                sendResponse("r200");
+            }
+            else
+            {
+                sendResponse("r300");
+            }
+
+            return true;
+        }
         static void sendMail(string address)
         {
             try
@@ -162,9 +233,8 @@ namespace serverSAF
                 SmtpServer.Port = 587;
                 SmtpServer.Credentials = new System.Net.NetworkCredential("safeaf.noreply@gmail.com", mailPassword);
                 SmtpServer.EnableSsl = true;
-
                 SmtpServer.Send(mail);
-                Console.WriteLine("mail Sent");
+                Console.WriteLine("mail Sent with code: "+ mailCode);
             }
             catch (Exception ex)
             {
@@ -174,12 +244,13 @@ namespace serverSAF
 
         static bool sendCode()
         {
-            
-            sendResponse(pubKeyStr);  //maybe put it in while(client.Available == 0){} here
-            string mailCypher = readFromClient();
             Random random = new Random();
             int randomCode = random.Next(1000, 9999);
             mailCode = randomCode.ToString();
+
+            sendResponse(pubKeyStr,stopCW:true);
+            Console.WriteLine("server->client: <sent server's public RSA key[r110]>; now expecting client to execute r112");
+            string mailCypher = readFromClient(size:1024);
             var bytesCypherText = Convert.FromBase64String(mailCypher);
             csp.ImportParameters(privKey);
             
@@ -187,7 +258,7 @@ namespace serverSAF
             var plainTextData = System.Text.Encoding.Unicode.GetString(bytesPlainTextData);
 
             Console.WriteLine("Rec mail:" + plainTextData);
-            sendMail(plainTextData.Replace('$',' '));
+            sendMail(plainTextData);
             return false;
         }
         #endregion
@@ -200,15 +271,22 @@ namespace serverSAF
             if(!stopCW)
                 Console.WriteLine("server->client: " + responseCode);
         }
-        static string readFromClient(int size=1024, bool stopCW = false)
+        static string readFromClient(int size=1024,bool decrypt = false, bool stopCW = false)
         {
-            if (server.Available == 0)
-                Console.WriteLine("NOTHING TO READ");
+            
             b = new byte[size];
             stm.Read(b, 0, b.Length);
             if(!stopCW)
-                Console.WriteLine("client->server: " + StripControlChars(Encoding.Default.GetString(b)));
-            return StripControlChars(Encoding.Default.GetString(b));
+                Console.WriteLine("client->server: " + StripControlChars(Convert.ToBase64String(b)));
+
+            if(decrypt)
+            {
+                csp.ImportParameters(privKey);
+                Console.WriteLine("returning:");
+                return Encoding.Default.GetString(csp.Decrypt(b, false));
+            }
+            else
+                return StripExtended(StripControlChars(Encoding.Default.GetString(b)));
         }
         #endregion
         static void Main(string[] args)
@@ -235,7 +313,7 @@ namespace serverSAF
 
                     if (String.Equals(requestRaw,"c100"))
                     { 
-                        if(loginReq())
+                        if(loginReq()) //sends server PUB key
                             sendResponse("c105");
                         else
                             sendResponse("c104");
@@ -247,7 +325,11 @@ namespace serverSAF
                     }
                     else if(String.Equals(requestRaw,"r110"))
                     {
-                        sendCode();
+                        sendCode(); //sends server PUB key
+                    }
+                    else if(String.Equals(requestRaw,"r120"))
+                    {
+                        HandleRegisterRequest(); // DOESN'T SEND SERVER PUB KEY AS IT IS PART OF r110
                     }
                 }
                 Console.WriteLine("=======END of communication==========");
