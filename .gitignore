@@ -1,3 +1,5 @@
+# Sensitive data
+*.data
 # User-specific files
 *.suo
 *.user
