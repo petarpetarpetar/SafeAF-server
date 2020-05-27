@@ -5,6 +5,7 @@ using System.Text;
 using System.Security.Cryptography;
 using System.Net.Mail;
 using System.IO;
+using System.Collections.Generic;
 
 namespace serverSAF
 {
@@ -34,6 +35,9 @@ namespace serverSAF
 
         static byte[] b;
 
+        static string recentMail;
+
+        static string recentIP;
         #region RSAstuff
         static void RSASETUP()
         {
@@ -96,6 +100,9 @@ namespace serverSAF
                 string mail, pw;
                 Console.WriteLine("server: extracting password and mail from " + plainTextData);
                 ExtractPWandMAIL(plainTextData,out mail, out pw);
+
+                recentMail = mail;
+
                 if (!checkIFUserExists(mail + "$" + pw))
                     return false;
                 else
@@ -139,6 +146,128 @@ namespace serverSAF
             }
             return false;
         }
+        //gets called from main
+        static void getUserData()
+        {
+           
+            if (!loginReq())
+                sendResponse("c104");
+            else
+                sendResponse("c102");
+
+            Console.WriteLine("ok im in");
+            sendResponse("g101");
+
+            List<string[]> temp = readAllSiteMailPassword(recentMail);
+
+            temp.ForEach(delegate (string[] del)
+            {
+                Console.WriteLine("=========");
+                sendResponse(del[0], true);
+                string temp = readFromClient();
+                Console.WriteLine("========="+temp);
+                sendResponse(del[1], true);
+                temp = readFromClient();
+                Console.WriteLine("=========");
+                sendResponse(del[2], true);
+                temp = readFromClient();
+                Console.WriteLine("=========");
+            });
+            sendResponse("g300");
+
+        }
+
+        static void newPw()
+        {
+            sendResponse("n101");
+            string site = readFromClient();
+            sendResponse("ok");
+            string mail = readFromClient();
+            sendResponse("ok");
+            string password = readFromClient();
+            sendResponse("ok");
+
+            appendPasswordListForUser(recentMail, site, mail, password);
+        }
+
+        static void appendPasswordListForUser(string usermail, string site, string mail, string password)
+        {
+            string encryptCeasar(string str, int shift)
+            {
+                if (ceasarRing == null)
+                    createCeasar();
+                string newStr = "";
+                foreach (char c in str)
+                {
+                    newStr += (char)((((int)c) + shift) % 222);
+                }
+                return newStr;
+            }
+
+            using (StreamWriter sw = File.AppendText("../../../DATABASE/"+usermail+".data"))
+            {
+                sw.WriteLine(encryptCeasar(site,70));
+                sw.WriteLine(encryptCeasar(mail, 70));
+                sw.WriteLine(encryptCeasar(password, 70));
+            }
+        }
+
+        static List<string[]> readAllSiteMailPassword(string usermail)
+        {
+            string decryptCeasar(string str, int shift)
+            {
+                if (ceasarRing == null)
+                    createCeasar();
+
+                string newStr = "";
+                foreach (char c in str)
+                {
+                    int temp = (((int)c) - shift);
+                    if (temp < 0)
+                        temp = 221 - temp; //mzd 222
+                    newStr += (char)temp;
+                }
+                return newStr;
+            }
+
+            List<string[]> data = new List<string[]>();
+
+            int counter = 0;
+
+            string[] tempArr = new string[3];
+            IEnumerable<string> lines = null;
+            if (File.Exists("../../../DATABASE/" + usermail + ".data"))
+            { 
+                 lines = File.ReadLines("../../../DATABASE/" + usermail + ".data");
+                foreach (var line in lines)
+                {
+                    if (counter == 0)
+                        tempArr = new string[3];
+
+                    tempArr[counter++] = decryptCeasar(line,70);
+
+                    if(counter == 3)
+                    {
+                        counter = 0;
+                        data.Add(tempArr);
+                    }
+                }
+            }
+
+            /*
+            data.ForEach(delegate(string[] pair)
+            {
+                Console.WriteLine("########");
+                Console.WriteLine(decryptCeasar(pair[0], 70));
+                Console.WriteLine(decryptCeasar(pair[1], 70));
+                Console.WriteLine(decryptCeasar(pair[2], 70));
+            });
+            */
+
+            return data;
+        }
+
+
         static void ExtractPWandMAIL(string plainTextData,out string mail, out string pw)
         {
             mail = new String("");
@@ -186,7 +315,7 @@ namespace serverSAF
             {
                 newPw += newData[i];
             }
-
+            recentMail = newMail;
             Console.WriteLine("newMail: "+newMail);
             Console.WriteLine("newCode: " + newCode);
             Console.WriteLine("newPw: "+ newPw);
@@ -210,13 +339,30 @@ namespace serverSAF
                     sw.WriteLine(newUser);
                 }
                 sendResponse("r200");
+                logToRecentUser("Successfull registration from "+recentIP);
             }
             else
             {
                 sendResponse("r300");
             }
 
+
             return true;
+        }
+
+        static void readAndSendLogs()
+        {
+            string text = File.ReadAllText("../../../DATABASE/"+recentMail+".logs");
+            sendResponse(text);
+        }
+
+
+        static void logToRecentUser(string what)
+        {
+            using (StreamWriter sw = File.AppendText("../../../DATABASE/" + recentMail + ".logs"))
+            {
+                sw.WriteLine("[{0,0}] {1}" ,DateTime.Now,what);
+            }
         }
         static void sendMail(string address)
         {
@@ -287,49 +433,70 @@ namespace serverSAF
             }
             else
                 return StripExtended(StripControlChars(Encoding.Default.GetString(b)));
-        }
+        } 
         #endregion
         static void Main(string[] args)
         {
+            //List<string[]> temp = readAllSiteMailPassword("petar@mail.com");
+            //appendPasswordListForUser("petar@mail.com", "facebook", "pm1@aa.com", "pw1");
             RSASETUP();
             listen = new TcpListener(IPAddress.Any, 1234);
             listen.Start();
             Console.WriteLine("please input server's mail password");
             mailPassword = Console.ReadLine();
             Console.WriteLine("Started the server at the port 1234. Current time: " + DateTime.Now);
-
+            
             while (true) {
 
                 server = listen.AcceptTcpClient();
                 stm = server.GetStream();
 
                 Console.WriteLine("Connection accepted from " + server.Client.RemoteEndPoint);
-                
-                while(server.Connected){
+                recentIP = server.Client.RemoteEndPoint.ToString();
+                while (server.Connected){
                     if (server.Available == 0)
                         continue;
+                    Console.WriteLine("waiting for new request");
                     String requestRaw = readFromClient(4);
                     Console.WriteLine("client->server: (request_EOC) =" + requestRaw +"_EOC");
 
-                    if (String.Equals(requestRaw,"c100"))
-                    { 
-                        if(loginReq()) //sends server PUB key
+                    if (String.Equals(requestRaw, "c100"))
+                    {
+                        if (loginReq()) //sends server PUB key
+                        { 
                             sendResponse("c105");
+                            logToRecentUser("Successfull login from " + recentIP);
+                        }
                         else
+                        { 
                             sendResponse("c104");
+                            logToRecentUser("Attempted login from " + recentIP);
+                        }
                     }
-                    else if(String.Equals(requestRaw,"e100"))
+                    else if (String.Equals(requestRaw, "e100"))
                     {
                         stm.Close();
                         server.Close();
                     }
-                    else if(String.Equals(requestRaw,"r110"))
+                    else if (String.Equals(requestRaw, "r110"))
                     {
                         sendCode(); //sends server PUB key
                     }
-                    else if(String.Equals(requestRaw,"r120"))
+                    else if (String.Equals(requestRaw, "r120"))
                     {
                         HandleRegisterRequest(); // DOESN'T SEND SERVER PUB KEY AS IT IS PART OF r110
+                    }
+                    else if (String.Equals(requestRaw, "g100"))
+                    {
+                        getUserData();
+                    }
+                    else if (String.Equals(requestRaw, "n100"))
+                    {
+                        newPw();
+                    }
+                    else if (String.Equals(requestRaw, "l100"))
+                    {
+                        readAndSendLogs();
                     }
                 }
                 Console.WriteLine("=======END of communication==========");
